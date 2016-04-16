@@ -40,13 +40,23 @@ b1:
 		mov			ah, 35h
 		mov			al, [interrupt_num]
     int     21h
-    mov     word ptr old_timer_handler, bx
-    mov     word ptr old_timer_handler+2, es
+    mov     word ptr old_handler, bx
+    mov     word ptr old_handler+2, es
 
     ; Устанавливаем наш обработчик
 		mov			ah, 25h
 		mov			al, [interrupt_num]
-    ;mov     ax, 251Ch
+    mov     dx, offset int_handler
+    int     21h
+
+		; Получаем адрес обработчика прерывания системного таймера
+		mov			ax, 351Ch
+    int     21h
+    mov     word ptr old_timer_handler, bx
+    mov     word ptr old_timer_handler+2, es
+
+    ; Устанавливаем наш обработчик прерывания системного таймера
+    mov     ax, 251Ch
     mov     dx, offset timer_handler
     int     21h
 
@@ -71,8 +81,39 @@ b1:
 
 interrupt_num   db    0
 old_timer_handler dd  ?
+old_handler 			dd  ?
 counter			db		"0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh
 start   endp
+
+int_handler			proc		far
+		; save all registers
+		pusha
+		push    es
+		push    ds
+		push    cs
+		pop     ds
+
+		mov			si, 08h
+l1:
+    cmp			[counter+si], MAX_NUM
+    jne			current
+
+    mov			[counter+si], "0"
+    cmp			si, 0
+    je			finish
+    sub			si, 2
+    jmp l1
+
+current:
+    inc			[counter+si]
+
+finish:
+		pop     ds
+		pop     es
+		popa
+		jmp     cs:old_handler
+
+int_handler			endp
 
 ; Новый обработчик для таймера
 timer_handler  proc    far
@@ -82,20 +123,6 @@ timer_handler  proc    far
     push    ds
     push    cs
     pop     ds
-
-		mov			si, 08h
-l1:
-    cmp			[counter+si], MAX_NUM
-    jne			current
-
-    mov			[counter+si], "0"
-    cmp			si, 0
-    je			write
-    sub			si, 2
-    jmp l1
-
-current:
-    inc			[counter+si]
 
 write:
 		mov			dx, VIDEO_START
