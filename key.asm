@@ -1,72 +1,50 @@
 .model tiny
 .code
-.386
-
+.186
 org 100h
 
-start:
-  jmp main
+ESCAPE_CODE    EQU   1Bh
+SPACE_CODE     EQU   20h
+CTRL_STATE     EQU   08h
 
-CTRL_STATE    db    08h
+start   proc    near
+    ; Устанавливаем обработчик клавиатурного прерывания
+    mov     ax, 3509h
+    int     21h
+    mov     word ptr old_key_handler, bx
+    mov     word ptr old_key_handler+2, es
 
-key_handler     proc      near
-    ; Сохраняем состояние
+    mov     ax, 2509h
+    mov     dx, offset key_handler
+    int     21h
+
+    ret
+
+old_key_handler dd  ?
+start   endp
+
+; Новый клавиатурный обработчик
+key_handler  proc    far
     pusha
-    push  ax
-    push  dx
-    push  ds
-
-    push  0h
-    pop   ds
-    mov   al, byte ptr ds:0417h           ; байт состояние клавиатуры
-    cmp   al, 08h
-    jne   finish
-
-    push  0B800h
-    pop   es
-    xor   di, di
-
-    mov   ax, 0FF1FH
-    stosw
-
-finish:
-    ; Возвращаем исходное состояние
+    push    es
+    push    ds
+    push    cs
     pop     ds
-    pop     dx
-    pop     ax
-    popa
-    call    word ptr cs:old_handler
-    iret
 
-    mes           db    "Hello!$", 0dh, 0ah
-    old_handler   dw    0
+    mov			dx, 0B800h
+    mov			es, dx
+    xor			di, di
+
+    mov     dx, 0h
+    mov     ds, dx
+    mov     al, ds:0417h
+    stosb
+
+    pop     ds
+    pop     es
+    popa
+    jmp     cs:old_key_handler
+
 key_handler endp
 
-main:
-  ; Сохраняем адрес старого обработчика
-  mov   ax, 3509h
-  int   21h
-  mov   word ptr old_handler, bx
-  mov   word ptr old_handler+2, es
-
-  ; Устанавливаем свой обработчик
-  mov   ax, 2509h
-  mov   dx, offset key_handler
-  int   21h
-
-  mov   dx, offset main
-  int   27h
-
-  ;push   ds
-  ;push   0h
-  ;pop    ds
-;l1:
-  ;mov   al, byte ptr ds:0417h           ; байт состояние клавиатуры
-  ;cmp   al, 08h
-  ;je    f1
-  ;jmp   l1
-
-;f1:
-  ;pop   ds
-  ;ret
 end start
