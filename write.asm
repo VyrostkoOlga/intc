@@ -25,25 +25,28 @@ start   proc    near
 		jl    b1
 
 		sub   bl, 30h
-		mov   al, 10h
+		mov   al, 10
 		mul   bl
 		mov    bl, bh
 
 b1:
 		xor    bh, bh
 		sub    bl, 30h
-		add   ax, bx
+		add    ax, bx
 
-		mov   interrupt_num, al
+		mov   [interrupt_num], al
 
 		; Получаем адрес обработчика нужного нам прерывания
 		mov			ah, 35h
+		mov			al, [interrupt_num]
     int     21h
     mov     word ptr old_timer_handler, bx
     mov     word ptr old_timer_handler+2, es
 
-    ; set our own handler
-    mov     ax, 251Ch
+    ; Устанавливаем наш обработчик
+		mov			ah, 25h
+		mov			al, [interrupt_num]
+    ;mov     ax, 251Ch
     mov     dx, offset timer_handler
     int     21h
 
