@@ -14,11 +14,59 @@ start:
 		old_handler 			dd  ?
 		old_key_handler 	dd  ?
 		old_pres_handler  dd 	?
+		old_video_handler dd 	?
 		increment					db	1
 		counter			db		"0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh
 		et_counter	db		"0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh
 		cl_counter	db		" ", 00Fh, " ", 00Fh, " ", 00Fh, " ", 00Fh, " ", 00Fh
 		mes					db		"Already in use", 0dh, 0ah, "$"
+		videoseg    dw 		0B800h
+		video_mode	db		?
+		video_page	db		?
+
+video_handler			proc	far
+		push	ds
+		push	cs
+		pop		ds
+
+		cmp		ah, 00h
+		je		change_mode
+		cmp		ah, 05h
+		je		change_page
+		jmp		finish_video
+
+change_mode:
+		mov		video_page, al
+		jmp		count
+change_page:
+		mov		al, 0h
+		mov		video_page, al
+		jmp		count
+count:
+		push	ax
+		mov		al, video_mode
+		mov		bh, video_page
+
+		cmp al, 7
+		jne not7
+		mov videoseg, 0B000h
+not7:
+		cmp     al, 2
+		jge     big_page
+		mov     cx, 80h
+		jmp     add_page_offset
+big_page:
+		mov     cx, 100h
+add_page_offset:
+		xor     ax, ax
+		mov     al, bh
+		mul     cx
+		add     videoseg, ax
+finish_video:
+		pop			ax
+		pop			ds
+		jmp dword ptr cs:[old_video_handler]
+video_handler			endp
 
 presence_handler	proc	far
 		cmp ah, 80h
@@ -71,7 +119,7 @@ timer_handler  proc    far
     pop     ds
 
 write:
-		mov			dx, VIDEO_START
+		mov			dx, videoseg
 		mov			es, dx
 		xor			di, di
 		mov			si, offset counter
@@ -213,6 +261,12 @@ b1:
 
 		mov   [interrupt_num], al
 
+		mov		ah, 0Fh
+		int		10h
+
+		mov		[video_mode], al
+		mov		[video_page], bh
+
 		; Получаем адрес обработчика прерывания системного таймера
 		cli
 		mov			ax, 351Ch
@@ -252,6 +306,20 @@ b1:
     mov     dx, offset presence_handler
     int     21h
 		;sti
+
+		; Получаем адрес обработчика нужного нам прерывания
+		;cli
+		mov			ah, 35h
+		mov			al, 10h
+    int     21h
+    mov     word ptr old_video_handler, bx
+    mov     word ptr old_video_handler+2, es
+
+    ; Устанавливаем наш обработчик
+		mov			ah, 25h
+		mov			al, 10h
+    mov     dx, offset video_handler
+    int     21h
 
 		; Получаем адрес обработчика нужного нам прерывания
 		;cli
