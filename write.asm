@@ -96,6 +96,7 @@ old_key_handler 	dd  ?
 increment					db	1
 counter			db		"0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh
 et_counter	db		"0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh
+cl_counter	db		" ", 00Fh, " ", 00Fh, " ", 00Fh, " ", 00Fh, " ", 00Fh
 start   endp
 
 int_handler			proc		far
@@ -205,9 +206,17 @@ cur_stop:
 		mov				[increment], 0
 cur_finish:
     jmp  not_our_key
+
 handle_quit:
-    ;mov     ah, 01Fh
-    ;stosw
+		mov				cx, 5
+
+		mov				dx, cs
+		mov				ds, dx
+		mov				es, dx
+		mov				di, offset counter
+		mov				si, offset cl_counter
+		rep				movsw
+		mov				[increment], 0
     jmp  not_our_key
 
 not_our_key:
