@@ -93,6 +93,7 @@ interrupt_num   db    0
 old_timer_handler dd  ?
 old_handler 			dd  ?
 old_key_handler 	dd  ?
+increment					db	1
 counter			db		"0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh
 et_counter	db		"0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh
 start   endp
@@ -117,7 +118,8 @@ l1:
     jmp l1
 
 current:
-    inc			[counter+si]
+		mov			bl, [increment]
+    add			[counter+si], bl
 
 finish:
 		pop     ds
@@ -191,10 +193,18 @@ handle_reset:
     jmp not_our_key
 
 handle_stop:
-    ;mov     ah, 01Eh
-    ;stosw
+		mov				dx, cs
+		mov				ds, dx
+		xor				ch, ch
+		mov				cl, [increment]
+		cmp				cl, 1
+		je				cur_stop
+		mov				[increment], 1
+		jmp				cur_finish
+cur_stop:
+		mov				[increment], 0
+cur_finish:
     jmp  not_our_key
-
 handle_quit:
     ;mov     ah, 01Fh
     ;stosw
