@@ -36,6 +36,27 @@ b1:
 
 		mov   [interrupt_num], al
 
+		; Получаем адрес обработчика прерывания системного таймера
+		mov			ax, 351Ch
+    int     21h
+    mov     word ptr old_timer_handler, bx
+    mov     word ptr old_timer_handler+2, es
+
+    ; Устанавливаем наш обработчик прерывания системного таймера
+    mov     ax, 251Ch
+    mov     dx, offset timer_handler
+    int     21h
+
+		; Устанавливаем обработчик клавиатурного прерывания
+    mov     ax, 3509h
+    int     21h
+    mov     word ptr old_key_handler, bx
+    mov     word ptr old_key_handler+2, es
+
+    mov     ax, 2509h
+    mov     dx, offset key_handler
+    int     21h
+
 		; Получаем адрес обработчика нужного нам прерывания
 		mov			ah, 35h
 		mov			al, [interrupt_num]
@@ -47,17 +68,6 @@ b1:
 		mov			ah, 25h
 		mov			al, [interrupt_num]
     mov     dx, offset int_handler
-    int     21h
-
-		; Получаем адрес обработчика прерывания системного таймера
-		mov			ax, 351Ch
-    int     21h
-    mov     word ptr old_timer_handler, bx
-    mov     word ptr old_timer_handler+2, es
-
-    ; Устанавливаем наш обработчик прерывания системного таймера
-    mov     ax, 251Ch
-    mov     dx, offset timer_handler
     int     21h
 
     ; check pressed key
@@ -82,7 +92,9 @@ b1:
 interrupt_num   db    0
 old_timer_handler dd  ?
 old_handler 			dd  ?
+old_key_handler 	dd  ?
 counter			db		"0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh
+et_counter	db		"0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh
 start   endp
 
 int_handler			proc		far
@@ -139,5 +151,62 @@ exit_handler:
     jmp     cs:old_timer_handler
 
 timer_handler endp
+
+; Новый клавиатурный обработчик
+key_handler  proc    far
+    pusha
+    push    es
+    push    ds
+    push    cs
+    pop     ds
+
+    mov     dx, 0040h
+    mov     ds, dx
+
+    mov     al,byte ptr ds:0017h ; считать байт состояния клавиатуры,
+    test    al,04h                      ; если не нажат Ctrl,
+    jz      not_our_key
+
+    mov     dx, cs
+    mov     ds, dx
+
+    in       al, 60h
+    cmp      al, 93h
+    je       handle_reset
+    cmp      al, 0ACh
+    je       handle_quit
+    cmp      al, 0AEh
+    je       handle_stop
+    jne      not_our_key
+
+handle_reset:
+		mov				cx, 5
+
+		mov				dx, cs
+		mov				ds, dx
+		mov				es, dx
+		mov				di, offset counter
+		mov				si, offset et_counter
+		rep				movsw
+    jmp not_our_key
+
+handle_stop:
+    ;mov     ah, 01Eh
+    ;stosw
+    jmp  not_our_key
+
+handle_quit:
+    ;mov     ah, 01Fh
+    ;stosw
+    jmp  not_our_key
+
+not_our_key:
+    pop     ds
+    pop     es
+    popa
+    jmp     cs:old_key_handler
+    ret
+
+key_handler endp
 
 end start
