@@ -147,11 +147,11 @@ key_handler  proc    far
 	jz _stand
 
 	in al, 60h
-	cmp al, 93h     ;Проверяем не нажата ли клавиша 'с' -> ctrl+r
+	cmp al, 013h     ;Проверяем не нажата ли клавиша 'r' -> ctrl+r
 	je handle_reset
-	cmp al, 0ACh     ; 'z' -> ctrl+z
+	cmp al, 2ch     ; 'z' -> ctrl+z
 	je handle_hide
-	cmp al, 0AEh    ; 'c' -> ctrl+c
+	cmp al, 2eh    ; 'c' -> ctrl+c
 	je handle_pause
 	jne _stand
 
