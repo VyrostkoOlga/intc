@@ -16,6 +16,9 @@ start:
 		old_pres_handler  dd 	?
 		old_video_handler dd 	?
 		increment					db	1
+		rowwidth 					dw 	0
+		rowwidth_samall 	db 	0
+		offs							dw	0
 		counter			db		"0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh
 		et_counter	db		"0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh, "0", 01Fh
 		cl_counter	db		" ", 00Fh, " ", 00Fh, " ", 00Fh, " ", 00Fh, " ", 00Fh
@@ -24,48 +27,76 @@ start:
 		video_mode	db		?
 		video_page	db		?
 
+		get_current_video: ; Получаем всю информацию о текущем видеорежиме
+		                   ; return curr_page, video_mode, rowwidth(40/80)
+		    push 0
+	        pop es
+	        push ax
+		    mov al, byte ptr es:[462h] ; Получили текущую страницу
+		    mov video_page, al
+		    mov al, byte ptr es:[449h] ; Получили текущий видеорежим
+		    mov video_mode, al
+		    mov ax, word ptr es:[44ah] ; Получили количество символов в строке
+		    mov rowwidth, ax           ; В al по сути
+		    pop ax
+		    ret
+
+		calc_offset: ; Считаем куда писать для текущего режима и страницы
+		             ; Вход: video_mode, curr_page, rowwidth(40/80) ; PS Похоже считается два раза rowwidth
+		             ; return: video_buff_addr(адрес сегмента видеопамяти), offs(смещение в видеопамяти)
+		    cmp video_mode, 00h
+	        je _rowwidth_40
+	        cmp video_mode, 01h
+	        je _rowwidth_40
+	        cmp video_mode, 02h
+	        je _rowwidth_80
+	        cmp video_mode, 03h
+	        je _rowwidth_80
+	        cmp video_mode, 07h
+	        je _rowwidth_80
+	        _next:
+	        mov videoseg, 0b800h
+	        cmp video_mode, 7h
+	        jne _not7
+	        mov videoseg, 0b000h
+	        _not7:
+		        mov bx, rowwidth
+		        add rowwidth, bx ; 40 -> 80; 80 -> 160
+		        ;mov counter, bx
+		        mov ax, 4096     ; Если (80x25) * 2 = 4000 Размер страницы
+		        cmp rowwidth, 80
+		        jne _not40
+		        mov ax, 2048     ; Если 40х25 (40x25) * 2 = 2000 Размер страницы
+
+	        _not40:
+	        	mov bl, video_page
+	        	mov bh, 0
+	        	mul bx       ; dx:ax = bx * ax
+	        	mov offs, ax ; Смещение в байтах от начала буфера
+
+		    _exit_calc_offset:
+		        ret
+	        _rowwidth_40:
+	            mov rowwidth, 40
+	            jmp _next
+	        _rowwidth_80:
+	            mov rowwidth, 80
+	            jmp _next
+
 video_handler			proc	far
-		push	ds
-		push	cs
-		pop		ds
+		pushf
+		call cs:old_video_handler
+		pushf
+		pusha
+		push es
 
-		cmp		ah, 00h
-		je		change_mode
-		cmp		ah, 05h
-		je		change_page
-		jmp		finish_video
+		call get_current_video
+		call calc_offset
 
-change_mode:
-		mov		video_page, al
-		jmp		count
-change_page:
-		mov		al, 0h
-		mov		video_page, al
-		jmp		count
-count:
-		push	ax
-		mov		al, video_mode
-		mov		bh, video_page
-
-		cmp al, 7
-		jne not7
-		mov videoseg, 0B000h
-not7:
-		cmp     al, 2
-		jge     big_page
-		mov     cx, 80h
-		jmp     add_page_offset
-big_page:
-		mov     cx, 100h
-add_page_offset:
-		xor     ax, ax
-		mov     al, bh
-		mul     cx
-		add     videoseg, ax
-finish_video:
-		pop			ax
-		pop			ds
-		jmp dword ptr cs:[old_video_handler]
+		pop es
+		popa
+		popf
+		iret
 video_handler			endp
 
 presence_handler	proc	far
@@ -119,9 +150,12 @@ timer_handler  proc    far
     pop     ds
 
 write:
+		call get_current_video
+		call calc_offset
 		mov			dx, videoseg
 		mov			es, dx
 		xor			di, di
+		add			di, offs
 		mov			si, offset counter
 		mov			cx, 5
 		rep movsw

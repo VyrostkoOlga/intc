@@ -7,10 +7,10 @@ start:
 
 main:
     mov   ah, 00h
-    mov   al, 00h
+    mov   al, 03h
     int   10h
 
-    mov   ah, 05h
+    mov   ah, 02h
     mov   al, 01h
     int   10h
     ret
