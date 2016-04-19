@@ -136,80 +136,81 @@ timer_handler endp
 
 ; Новый клавиатурный обработчик
 key_handler  proc    far
-    pusha
-    push    es
-    push    ds
-    push    cs
-    pop     ds
+	pusha
+	push es
+	push si
 
-    mov     dx, 0040h
-    mov     ds, dx
+	mov ax,40h    ;проверяем на нажатие любого Ctrl
+	mov es,ax
+	mov al,byte ptr es:[17h]
+	test al,04h
+	jz _stand
 
-    mov     al,byte ptr ds:0017h 				; считать байт состояния клавиатуры,
-    test    al,04h                      ; если не нажат Ctrl, не наша комбинация
-    jz      not_our_key
+	in al, 60h
+	cmp al, 93h     ;Проверяем не нажата ли клавиша 'с' -> ctrl+r
+	je handle_reset
+	cmp al, 0ACh     ; 'z' -> ctrl+z
+	je handle_hide
+	cmp al, 0AEh    ; 'c' -> ctrl+c
+	je handle_pause
+	jne _stand
 
-    mov     dx, cs
-    mov     ds, dx
+handle_reset:   ; Приводим счетчик в начальное состояние
+	mov				cx, 5
 
-    in       al, 60h
-    cmp      al, 93h
-    je       handle_reset
-    cmp      al, 0ACh
-    je       handle_quit
-    cmp      al, 0AEh
-    je       handle_stop
-    jne      not_our_key
+	mov				dx, cs
+	mov				ds, dx
+	mov				es, dx
+	mov				di, offset counter
+	mov				si, offset et_counter
+	rep				movsw
+	jmp 			_vuhid
 
-handle_reset:
-		mov				cx, 5
-
-		mov				dx, cs
-		mov				ds, dx
-		mov				es, dx
-		mov				di, offset counter
-		mov				si, offset et_counter
-		rep				movsw
-    jmp not_our_key
-
-handle_stop:
-		mov				dx, cs
-		mov				ds, dx
-		xor				ch, ch
-		mov				cl, [increment]
-		cmp				cl, 1
-		je				cur_stop
-		mov				[increment], 1
-		jmp				cur_finish
+handle_pause:
+	mov				dx, cs
+	mov				ds, dx
+	xor				ch, ch
+	mov				cl, [increment]
+	cmp				cl, 1
+	je				cur_stop
+	mov				[increment], 1
+	jmp				cur_finish
 cur_stop:
-		mov				[increment], 0
+	mov				[increment], 0
 cur_finish:
-    jmp  not_our_key
+	jmp  _vuhid
 
-handle_quit:
-		mov				cx, 5
+handle_hide:
+	mov				cx, 5
 
-		mov				dx, cs
-		mov				ds, dx
-		mov				es, dx
-		mov				di, offset counter
-		mov				si, offset cl_counter
-		rep				movsw
-		mov				[increment], 0
-    jmp  not_our_key
+	mov				dx, cs
+	mov				ds, dx
+	mov				es, dx
+	mov				di, offset counter
+	mov				si, offset cl_counter
+	rep				movsw
+	mov				[increment], 0
+	jmp _vuhid
 
-not_our_key:
-		; Здесь нужно убрать символ перед передачей управления дальше
-		;mov     dx, 0040h
-		;mov     ds, dx
-		;mov			di, word ptr ds:001Ah
-		;mov			word ptr ds:001Ch,di
-
-    pop     ds
-    pop     es
-    popa
-    jmp     cs:old_key_handler
-    ret
+	_vuhid:
+			; Дальше для меня магия - читать LU/BIOS2.DOC (284 строка)
+			; Еще читать тут http://forum.sources.ru/index.php?showtopic=284707
+			mov al, 20h     ; сброс КП
+			out 20h, al
+			in  al, 61h
+			or  al, 80h
+			out 61h, al     ; сброс прерывания у контроллера клавиатуры
+			and al, 7Fh
+			out 61h,al
+			jmp ttt
+	_stand:             ; Если не нажато Ctrl + что-то - вызываем стандартный обработчик
+			pushf
+			call cs:old_key_handler
+	ttt:
+			pop si
+			pop es
+			popa
+			iret
 
 key_handler endp
 
